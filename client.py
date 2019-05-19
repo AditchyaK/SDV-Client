@@ -79,7 +79,7 @@ def splitData(data):
     return datatru
 #--------------------------------------------------------------------------
 #External thermometer address: 28-031897792ede
-
+"""
 os.system('modprobe w1-gpio')
 os.system('modprobe w1-therm')
 
@@ -104,7 +104,7 @@ def read_temp():
         temp_string = lines [1].strip()[temp_output+2:]
         temp_c = float(temp_string) / 1000.0
         return temp_c
-    
+""" 
 #-----------------------------------------------------------------------------
 #this class contains all the control methods such as for the claw, motors and lights
 class controlsClass():
@@ -179,14 +179,14 @@ class controlsClass():
     #this function shuts down all the thrusters
     def stopAllMotors(self, pwm, n1, off):
         for i in range(6):
-            i += 12
-            pwm.set_pwm(i, 1, int(n1))
+            inu = i + 12
+            pwm.set_pwm(inu, 1, int(n1))
             time.sleep(1)
         if off:
             time.sleep(1)
             for i in range(6):
-                i += 12
-                pwm.set_pwm(i, 0, int(0))
+                inu = i + 12
+                pwm.set_pwm(inu, 0, int(0))
             
     #these are the controls for the claw (linear actuator)
     def claw (self, Mkit, button1, button2):
@@ -224,8 +224,6 @@ except:
     sys.exit()
 
 time.sleep(1)
-for i in range(6):
-    pwm.set_pwm(i, 1, int(n1))
 
 #initializing controls class
 controls = controlsClass()
