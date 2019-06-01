@@ -114,15 +114,15 @@ class controlsClass():
     credit for the normalization of xbox controls to thruster control goes to Evan K.
     """
     
-    def thruster100L(self, pwm, LT, RT, RX, n, d):
-        nu = int(max(min(((d*(RT-LT))*(abs(RX)+1)+(d*RX)), d), -d)+n)
+    def thruster100L(self, pwm, LT, RT, LX, n, d):
+        nu = int(max(min(((d*(RT-LT))*(abs(LX)+1)+(d*LX)), d), -d)+n)
         if nu != n:
             pwm.set_pwm(10, 1, nu)
         else:
             pwm.set_pwm(10, 1, n)
         print(nu, end = " ")
-    def thruster100R(self, pwm, LT, RT, RX, n, d):
-        nu = int(max(min(((d*(RT-LT))*(abs(RX)+1)-(d*RX)), d), -d)+n)
+    def thruster100R(self, pwm, LT, RT, LX, n, d):
+        nu = int(max(min(((d*(RT-LT))*(abs(LX)+1)-(d*LX)), d), -d)+n)
         if nu != n:
             pwm.set_pwm(11, 1, nu)
         else:
@@ -130,29 +130,29 @@ class controlsClass():
         print(nu, end = " ") 
         
     #P3 to P6 are up and down thrusters
-    def thruster200FL(self, pwm, LX, LY, RY, n, d):
-        nu = int(max(min(((d*LY)/(abs((LX-RY)/2)+1)-(d*((LX-RY)/2))), d), -d)+n)
+    def thruster200FL(self, pwm, RX, LY, RY, n, d):
+        nu = int(max(min(((d*LY)/(abs((RX-RY)/2)+1)-(d*((RX-RY)/2))), d), -d)+n)
         if nu != n:
             pwm.set_pwm(12, 1, nu)
         else:
             pwm.set_pwm(12, 1, n)
-        print(nu, end = " ") 
-    def thruster200FR(self, pwm, LX, LY, RY, n, d):
-        nu = int(max(min(((d*LY)/(abs((-LX-RY)/2)+1)-(d*((-LX-RY)/2))), d), -d)+n)
+        print(nu, end = " ")
+    def thruster200FR(self, pwm, RX, LY, RY, n, d):
+        nu = int(max(min(((d*LY)/(abs((-RX-RY)/2)+1)-(d*((-RX-RY)/2))), d), -d)+n)
         if nu != n:
             pwm.set_pwm(13, 1, nu)
         else:
             pwm.set_pwm(13, 1, n)
         print(nu, end = " ") 
-    def thruster200BL(self, pwm, LX, LY, RY, n, d):
-        nu = int(max(min(((d*LY)/(abs((LX+RY)/2)+1)-(d*((LX+RY)/2))), d), -d)+n)
+    def thruster200BL(self, pwm, RX, LY, RY, n, d):
+        nu = int(max(min(((d*LY)/(abs((RX+RY)/2)+1)-(d*((RX+RY)/2))), d), -d)+n)
         if nu != n:
             pwm.set_pwm(14, 1, nu)
         else:
             pwm.set_pwm(14, 1, n)
         print(nu, end = " ") 
-    def thruster200BR(self, pwm, LX, LY, RY, n, d):
-        nu = int(max(min(((d*LY)/(abs((-LX+RY)/2)+1)-(d*((-LX+RY)/2))), d), -d)+n)
+    def thruster200BR(self, pwm, RX, LY, RY, n, d):
+        nu = int(max(min(((d*LY)/(abs((-RX+RY)/2)+1)-(d*((-RX+RY)/2))), d), -d)+n)
         if nu != n:
             pwm.set_pwm(15, 1, nu)
         else:
@@ -179,15 +179,22 @@ class controlsClass():
     #this function shuts down all the thrusters
     def stopAllMotors(self, pwm, n1, off):
         for i in range(6):
-            inu = i + 12
+            inu = i + 10
             pwm.set_pwm(inu, 1, int(n1))
             time.sleep(1)
         if off:
             time.sleep(1)
             for i in range(6):
-                inu = i + 12
+                inu = i + 10
                 pwm.set_pwm(inu, 0, int(0))
-            
+
+    #This function controls lights
+    def light(self, pwm, RH, n, d):
+        nu = int(max(min((n+(RH*d/3)),n+d),n))
+        pwm.set_pwm(0, 1, nu)
+        pwm.set_pwm(1, 1, nu)
+        print("Lights:\t",nu)
+    
     #these are the controls for the claw (linear actuator)
     def claw (self, Mkit, button1, button2):
         if button1:
@@ -203,8 +210,13 @@ sent by the server and converting it to an array of values to use as controls
 #----------------------------------------------------------------------------
 #initialize variables for thruster control
 n1 = 1260
-d1 = 240
-d2 = 300
+d1_1 = 250
+d1_2 = 300
+n2 = 1100
+d2 = 800
+lightmode = 0
+RH = 0
+RH_delta = 0
 
 #initalizing the MotorKit class
 try:
@@ -274,27 +286,36 @@ while True:
     except:
         print("No Data")
 
+    if data:
+        #Temporary variable to compare to the new value of RH
+        RH_delta = RH
+        #button names are added for easy access
+        A, B, X, Y, LH, RH, DU, DD, DL, DR, LB, RB, LX, LY, RX, RY, LT, RT = setControllerVar(data)
 
-    #button names are added for easy access
-    A, B, X, Y, LH, RH, DU, DD, DL, DR, LB, RB, LX, LY, RX, RY, LT, RT = setControllerVar(data)
+        #winch controls (YB out, XB in)
+        controls.winchControl(Mkit, Y, X)
 
-    #winch controls (YB out, XB in)
-    controls.winchControl(Mkit, Y, X)
+        #claw controls (RB out, LB in)
+        controls.claw(Mkit, RB, LB)
 
-    #claw controls (RB out, LB in)
-    controls.claw(Mkit, RB, LB)
+        #yaw and forward/backward
+        controls.thruster100L(pwm, LT, RT, LX, n1, d1_2)
+        controls.thruster100R(pwm, LT, RT, LX, n1, d1_2)
 
-    #yaw and forward/backward
-    controls.thruster100L(pwm, LT, RT, RX, n1, d2)
-    controls.thruster100R(pwm, LT, RT, RX, n1, d2)
-
-    #pitching, rolling and vertical thrust
-    controls.thruster200FL(pwm, LX, LY, RY, n1, d1)
-    controls.thruster200FR(pwm, LX, LY, RY, n1, d1)
-    controls.thruster200BL(pwm, LX, LY, RY, n1, d1)
-    controls.thruster200BR(pwm, LX, LY, RY, n1, d1)
+        #pitching, rolling and vertical thrust
+        controls.thruster200FL(pwm, RX, (-LY), RY, n1, d1_1)
+        controls.thruster200FR(pwm, RX, (-LY), RY, n1, d1_1)
+        controls.thruster200BL(pwm, RX, (-LY), RY, n1, d1_1)
+        controls.thruster200BR(pwm, RX, (-LY), RY, n1, d1_1)
+        
+        #Light modes
+        if not(RH_delta==RH) and (RH==1):
+            lightmode = (lightmode+1)%4
+            print("Light mode has been changed to \t",lightmode)
+            controls.light(pwm, lightmode, n2, d2)
     
 #cleaning up everything at the end
 s.close()
 print("\nYou have been disconnected from the server")
 sys.exit()
+
