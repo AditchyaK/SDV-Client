@@ -44,7 +44,4 @@ except socket.error as msg:
     print("Socket failed to connect to host /n", msg)
 
 while True:
-    s.send(str.encode(read_temp(), 'utf-7'))
-    data = s.recv(1024)
-    data = data.decode('utf-7')
-    print(data)
+    s.send(str.encode(read_temp()))

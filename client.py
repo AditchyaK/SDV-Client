@@ -1,4 +1,4 @@
-import sys, socket, time, Adafruit_PCA9685, os, subprocess
+import sys, socket, time, Adafruit_PCA9685, os, threading
 from adafruit_motorkit import MotorKit
 from adafruit_motor import stepper
 
@@ -77,39 +77,10 @@ def splitData(data):
         except:
             datatru[i] = float(datatru[i])
     return datatru
-#--------------------------------------------------------------------------
-#External thermometer address: 28-031897792ede
-"""
-os.system('modprobe w1-gpio')
-os.system('modprobe w1-therm')
-
-temp_sensor = '/sys/bus/w1/devices/28-031897792ede/w1_slave'
-
-def temp_raw():
-    
-    f = open(temp_sensor, 'r')
-    lines = f.readlines()
-    f.close()
-    return lines
-
-def read_temp():
-    
-    lines = temp_raw()
-    while lines[0].strip()[-3:] != 'YES':
-        lines = temp_raw()
-        
-    temp_output = lines[1].find('t=')
-    
-    if temp_output != -1:
-        temp_string = lines [1].strip()[temp_output+2:]
-        temp_c = float(temp_string) / 1000.0
-        return temp_c
-""" 
-#-----------------------------------------------------------------------------
+#----------------------------------------------------------------------------
 #this class contains all the control methods such as for the claw, motors and lights
 class controlsClass():
     #P1 and P2 are forward and backward thrusters
-
     """
     credit for the normalization of xbox controls to thruster control goes to Evan K.
     """
@@ -203,10 +174,36 @@ class controlsClass():
             Mkit.motor1.throttle = 1.0
         else:
             Mkit.motor1.throttle = 0
-"""
-This is the actual start of the main loop which checks for data being
-sent by the server and converting it to an array of values to use as controls
-"""
+
+#----------------------------------------------------------------------------
+class ThermThread(threading.Thread):
+    def __init__(self):
+        threading.Thread.__init__(self)
+        #print("Thread open: Temperature Sensor")
+        time.sleep(1/2)
+
+    def run (self):
+        while True:
+            global tempData
+            tempData = str(read_temp())
+
+def temp_raw():
+    f = open(temp_sensor, 'r')
+    lines = f.readlines()
+    f.close()
+    return lines
+
+def read_temp():
+    lines = temp_raw()
+    while lines[0].strip()[-3:] != 'YES':
+        lines = temp_raw()
+        
+    temp_output = lines[1].find('t=')
+    if temp_output != -1:
+        temp_string = lines [1].strip()[temp_output+2:]
+        temp_c = float(temp_string) / 1000.0
+        return str(temp_c)
+
 #----------------------------------------------------------------------------
 #initialize variables for thruster control
 n1 = 1260
@@ -217,6 +214,7 @@ d2 = 800
 lightmode = 0
 RH = 0
 RH_delta = 0
+tempData = str(0)
 
 #initalizing the MotorKit class
 try:
@@ -249,6 +247,13 @@ print("Socket has been created")
 port = 5555
 host = '169.254.227.12'
 
+os.system('modprobe w1-gpio')
+os.system('modprobe w1-therm')
+temp_sensor = '/sys/bus/w1/devices/28-031897792ede/w1_slave'
+
+tempthread = ThermThread()
+tempthread.start()
+
 #--------------------------------------------------------------------
 #client socket connects to the server with static ip address
 try: 
@@ -264,7 +269,6 @@ while True:
     data = data.decode('utf-8')
     
     #this disconnects the client (this device) from the server
-    print("")
     if (data == "KILL"):
         controls.stopAllMotors(pwm, n1, 1)
         time.sleep(1)
@@ -313,8 +317,12 @@ while True:
             lightmode = (lightmode+1)%4
             print("Light mode has been changed to \t",lightmode)
             controls.light(pwm, lightmode, n2, d2)
+
+        #sends temperature data
+        s.send(str.encode(tempData, 'utf-7'))
     
 #cleaning up everything at the end
+
 s.close()
 print("\nYou have been disconnected from the server")
 sys.exit()
