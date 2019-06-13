@@ -131,13 +131,16 @@ class controlsClass():
         print(nu)
 
     #these are the controls for the winch (M3 and M4 on motor hat)
-    def winchControl(self, Mkit, YB, XB):
-        if YB:
-            for i in range(200):
-                Mkit.stepper2.onestep(direction=stepper.FORWARD, style=stepper.SINGLE)
-        elif XB:
-            for i in range(200):
-                Mkit.stepper2.onestep(direction=stepper.BACKWARD, style=stepper.SINGLE)
+    def winchControl(self, Mkit, YB, XB, on):
+        if on:
+            if YB:
+                for i in range(200):
+                    Mkit.stepper2.onestep(direction=stepper.FORWARD, style=stepper.MICROSTEP)
+            elif XB:
+                for i in range(200):
+                    Mkit.stepper2.onestep(direction=stepper.BACKWARD, style=stepper.MICROSTEP)
+        else:
+            Mkit.stepper2.release()
 
     def microMotor(self, Mkit, BB, AB):
         if BB:
@@ -152,7 +155,7 @@ class controlsClass():
         for i in range(6):
             inu = i + 10
             pwm.set_pwm(inu, 1, int(n1))
-            time.sleep(1)
+            time.sleep(1/6)
         if off:
             time.sleep(1)
             for i in range(6):
@@ -176,16 +179,20 @@ class controlsClass():
             Mkit.motor1.throttle = 0
 
 #----------------------------------------------------------------------------
+"""Multithreading stuff"""
 class ThermThread(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)
-        #print("Thread open: Temperature Sensor")
+        print("Thread open: Temperature Sensor")
         time.sleep(1/2)
 
     def run (self):
         while True:
-            global tempData
-            tempData = str(read_temp())
+            if (data == "KILL"):
+                break
+            else:
+                global tempData
+                tempData = str(read_temp())
 
 def temp_raw():
     f = open(temp_sensor, 'r')
@@ -204,6 +211,22 @@ def read_temp():
         temp_c = float(temp_string) / 1000.0
         return str(temp_c)
 
+
+class stepperThread(threading.Thread):
+    def __init__(self):
+        threading.Thread.__init__(self)
+        print("Thread open: Winch Control")
+        time.sleep(1/2)
+    
+    def run(self):
+        while True:
+            if (data == "KILL"):
+                break
+            else:
+                global Y, X
+                controls.winchControl(Mkit, Y, X)
+                time.sleep(1/4)
+
 #----------------------------------------------------------------------------
 #initialize variables for thruster control
 n1 = 1260
@@ -214,6 +237,9 @@ d2 = 800
 lightmode = 0
 RH = 0
 RH_delta = 0
+Y = 0
+X = 0
+data = 0
 tempData = str(0)
 
 #initalizing the MotorKit class
@@ -247,12 +273,15 @@ print("Socket has been created")
 port = 5555
 host = '169.254.227.12'
 
-os.system('modprobe w1-gpio')
-os.system('modprobe w1-therm')
+os.system('sudo modprobe w1-gpio')
+os.system('sudo modprobe w1-therm')
 temp_sensor = '/sys/bus/w1/devices/28-031897792ede/w1_slave'
 
-tempthread = ThermThread()
-tempthread.start()
+temp = ThermThread()
+temp.start()
+
+winch = stepperThread()
+winch.start()
 
 #--------------------------------------------------------------------
 #client socket connects to the server with static ip address
@@ -271,7 +300,8 @@ while True:
     #this disconnects the client (this device) from the server
     if (data == "KILL"):
         controls.stopAllMotors(pwm, n1, 1)
-        time.sleep(1)
+        winch.join()
+        temp.join()
         break
     
     #this is to set motors to stop when the controller is disconnected
@@ -296,9 +326,6 @@ while True:
         #button names are added for easy access
         A, B, X, Y, LH, RH, DU, DD, DL, DR, LB, RB, LX, LY, RX, RY, LT, RT = setControllerVar(data)
 
-        #winch controls (YB out, XB in)
-        controls.winchControl(Mkit, Y, X)
-
         #claw controls (RB out, LB in)
         controls.claw(Mkit, RB, LB)
 
@@ -311,6 +338,8 @@ while True:
         controls.thruster200FR(pwm, RX, (-LY), RY, n1, d1_1)
         controls.thruster200BL(pwm, RX, (-LY), RY, n1, d1_1)
         controls.thruster200BR(pwm, RX, (-LY), RY, n1, d1_1)
+
+        controls.microMotor(Mkit, B, A)
         
         #Light modes
         if not(RH_delta==RH) and (RH==1):
@@ -322,7 +351,6 @@ while True:
         s.send(str.encode(tempData, 'utf-7'))
     
 #cleaning up everything at the end
-
 s.close()
 print("\nYou have been disconnected from the server")
 sys.exit()
